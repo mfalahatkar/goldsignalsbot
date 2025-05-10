@@ -1,112 +1,105 @@
-# bot.py
-
 import logging
 import requests
 from bs4 import BeautifulSoup
-from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from deep_translator import GoogleTranslator
 
-# تنظیم توکن ربات
-TELEGRAM_BOT_TOKEN = "7721073253:AAGq1z2wcdI68SdW06a3xo88dMOGycmcJoY"
-
-# پیکربندی لاگ‌ها
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# منابع خبری
+# ---------------------- CONFIG ----------------------
+TELEGRAM_TOKEN = "7721073253:AAGq1z2wcdI68SdW06a3xo88dMOGycmcJoY"
 NEWSAPI_TOKEN = "27284966a77a4619a5c89846514cb284"
 GNEWS_TOKEN = "cc588426fdda5e76dd8e4f8f7706616e"
 MEDIASTACK_TOKEN = "c50464aae1764f79a272dfaa41cf478f"
-NEWSDATA_IO_IRAN = "api_live_OQyfGEsKxBWbMbIv2g5VBZXIxlKcQTMiI5Va5tccJ2"
+NEWSDATA_TOKEN = "api_live_OQyfGEsKxBWbMbIv2g5VBZXIxlKcQTMiI5Va5tccJ2"
 
-# توابع دریافت اخبار
+# ---------------------- LOGGER ----------------------
+logging.basicConfig(level=logging.INFO)
 
-def get_iran_news():
+# ---------------------- HANDLERS ----------------------
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("🌍 اخبار جهانی", callback_data="global")],
+        [InlineKeyboardButton("🇮🇷 اخبار ایران", callback_data="iran")],
+        [InlineKeyboardButton("📡 تحلیل ترکیبی", callback_data="combined")],
+        [InlineKeyboardButton("📊 نرخ روز", callback_data="rates")]
+    ]
+    await update.message.reply_text("یکی از گزینه‌های زیر را انتخاب کنید:",
+                                    reply_markup=InlineKeyboardMarkup(keyboard))
+
+# ---------------------- TRANSLATOR ----------------------
+def translate(text):
     try:
-        response = requests.get("https://www.mehrnews.com/service/Economy")
-        soup = BeautifulSoup(response.text, "html.parser")
-        titles = soup.select(".news a.title")
-        news = [title.get_text(strip=True) for title in titles[:5]]
-        return news
-    except Exception as e:
-        logger.error("خطا در دریافت اخبار ایران: %s", e)
-        return ["❌ خطا در دریافت اخبار ایران"]
+        return GoogleTranslator(source='auto', target='fa').translate(text)
+    except:
+        return text
 
-def get_global_news():
+# ---------------------- GLOBAL NEWS ----------------------
+def fetch_global_news():
     try:
         url = f"https://newsapi.org/v2/top-headlines?category=business&language=en&apiKey={NEWSAPI_TOKEN}"
         res = requests.get(url).json()
-        return [article['title'] for article in res.get("articles", [])[:5]]
-    except Exception as e:
-        logger.error("خطا در دریافت اخبار جهانی: %s", e)
-        return ["❌ خطا در دریافت اخبار جهانی"]
+        return [article["title"] for article in res.get("articles", [])[:5]]
+    except:
+        return []
 
-def get_rates():
+# ---------------------- IRAN NEWS ----------------------
+def fetch_iran_news():
     try:
-        response = requests.get("https://www.tgju.org/")
-        soup = BeautifulSoup(response.text, "html.parser")
-        data = {}
-        for key in ["price_dollar_rl", "price_sekee", "price_old_gold", "crypto-bitcoin"]:
-            tag = soup.find("td", id=key)
-            if tag:
-                data[key] = tag.text.strip()
-        return data
+        url = f"https://newsdata.io/api/1/news?apikey={NEWSDATA_TOKEN}&country=ir&language=fa"
+        res = requests.get(url).json()
+        return [article["title"] for article in res.get("results", [])[:5]]
+    except:
+        return []
+
+# ---------------------- EXCHANGE RATES ----------------------
+def fetch_rates():
+    try:
+        response = requests.get("https://www.tgju.org/" )
+        soup = BeautifulSoup(response.text, "lxml")
+
+        dollar = soup.find("td", class_="nf" , text="دلار آزاد").find_next_sibling("td").text.strip()
+        gold = soup.find("td", class_="nf", text="طلای 18 عیار").find_next_sibling("td").text.strip()
+        coin = soup.find("td", class_="nf", text="سکه امامی").find_next_sibling("td").text.strip()
+
+        btc = requests.get("https://api.coindesk.com/v1/bpi/currentprice/BTC.json").json()
+        bitcoin = btc["bpi"]["USD"]["rate"]
+
+        return f"💵 دلار: {dollar}\n🪙 سکه: {coin}\n📈 طلا: {gold}\n₿ بیت‌کوین: {bitcoin} دلار"
     except Exception as e:
-        logger.error("خطا در دریافت نرخ‌ها: %s", e)
-        return {}
+        return f"❌ خطا در دریافت نرخ‌ها"
 
-# فرمان شروع
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [KeyboardButton("🇮🇷 اخبار ایران"), KeyboardButton("🌍 اخبار جهانی")],
-        [KeyboardButton("📡 تحلیل ترکیبی"), KeyboardButton("📊 نرخ روز")],
-    ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    await update.message.reply_text("سلام! یکی از گزینه‌ها را انتخاب کنید:", reply_markup=reply_markup)
+# ---------------------- CALLBACKS ----------------------
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
 
-# پردازش پیام‌ها
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
+    if data == "global":
+        news = fetch_global_news()
+        translated = [translate(n) for n in news]
+        await query.edit_message_text("\n".join(translated) or "❌ خبری یافت نشد.")
 
-    if text == "🇮🇷 اخبار ایران":
-        news = get_iran_news()
-        await update.message.reply_text("\n\n".join(news))
+    elif data == "iran":
+        news = fetch_iran_news()
+        await query.edit_message_text("\n".join(news) or "❌ خبری یافت نشد.")
 
-    elif text == "🌍 اخبار جهانی":
-        news = get_global_news()
-        await update.message.reply_text("\n\n".join(news))
+    elif data == "rates":
+        rates = fetch_rates()
+        await query.edit_message_text(rates)
 
-    elif text == "📊 نرخ روز":
-        rates = get_rates()
-        if rates:
-            message = f"💵 دلار: {rates.get('price_dollar_rl', '---')}\n"
-            message += f"🪙 سکه: {rates.get('price_sekee', '---')}\n"
-            message += f"📈 طلای ۱۸ عیار: {rates.get('price_old_gold', '---')}\n"
-            message += f"₿ بیت‌کوین: {rates.get('crypto-bitcoin', '---')}"
-            await update.message.reply_text(message)
-        else:
-            await update.message.reply_text("❌ خطا در دریافت نرخ‌ها")
+    elif data == "combined":
+        ir_news = fetch_iran_news()
+        gl_news = fetch_global_news()
+        translated = [translate(n) for n in gl_news]
+        rates = fetch_rates()
 
-    elif text == "📡 تحلیل ترکیبی":
-        iran_news = get_iran_news()
-        global_news = get_global_news()
-        rates = get_rates()
-        message = "📰 تحلیل ترکیبی:\n"
-        message += "\n🇮🇷 مهم‌ترین اخبار ایران:\n" + "\n".join(iran_news[:3])
-        message += "\n\n🌍 اخبار جهانی مهم:\n" + "\n".join(global_news[:3])
-        message += "\n\n📊 نرخ‌ها:\n"
-        message += f"💵 دلار: {rates.get('price_dollar_rl', '---')}\n"
-        message += f"🪙 سکه: {rates.get('price_sekee', '---')}\n"
-        message += f"📈 طلا: {rates.get('price_old_gold', '---')}\n"
-        message += f"₿ بیت‌کوین: {rates.get('crypto-bitcoin', '---')}"
-        await update.message.reply_text(message)
+        message = f"📰 تحلیل ترکیبی:\n\n🇮🇷 مهم‌ترین اخبار ایران:\n{chr(10).join(ir_news)}\n\n🌍 اخبار جهانی مهم:\n{chr(10).join(translated)}\n\n📊 نرخ‌ها:\n{rates}"
+        await query.edit_message_text(message)
 
-    else:
-        await update.message.reply_text("دستور نامعتبر است. لطفاً یکی از گزینه‌های منو را انتخاب کنید.")
-
-# راه‌اندازی ربات
+# ---------------------- MAIN ----------------------
 if __name__ == '__main__':
-    app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    app = Application.builder().token(7721073253:AAGq1z2wcdI68SdW06a3xo88dMOGycmcJoY
+).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(CallbackQueryHandler(button))
     app.run_polling()
