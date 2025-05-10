@@ -31,31 +31,42 @@ def analyze_news(news_text):
 
     return "ℹ️ خبر خاصی مشاهده نشد. سیگنالی صادر نمی‌شود."
 
-# فرمان /start با دکمه تحلیل
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[InlineKeyboardButton("📊 تحلیل بازار طلا و دلار", callback_data='analyze_now')]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("سلام! من ربات تحلیلگر بازار طلا و دلار هستم.\nبرای تحلیل بازار دکمه زیر را بزنید 👇", reply_markup=reply_markup)
 
-# تحلیل وقتی دکمه زده شد
+# منوی اصلی با دکمه‌ها
+def main_menu():
+    keyboard = [
+        [InlineKeyboardButton("📡 تحلیل و سیگنال بازار", callback_data="analyze_signal")],
+        [InlineKeyboardButton("🔄 به‌روزرسانی اخبار", callback_data="refresh_news")],
+        [InlineKeyboardButton("ℹ️ راهنما", callback_data="help_info")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+# فرمان /start با دکمه‌ها
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "سلام! به ربات تحلیلگر طلا و دلار خوش آمدید 👋\nاز دکمه‌های زیر استفاده کنید:",
+        reply_markup=main_menu()
+    )
+
+# رسیدگی به دکمه‌ها
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    if query.data == 'analyze_now':
+    if query.data == "analyze_signal":
         news = get_news()
         signal = analyze_news(news.lower())
-        await query.message.reply_text(f"🗞️ اخبار منتخب:\n{news}\n\n📌 تحلیل:\n{signal}")
+        await query.message.reply_text(f"🗞️ اخبار منتخب:\n{news}\n\n📊 تحلیل:\n{signal}")
 
-# دستور مستقیم /analyze بدون دکمه
-async def analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    news = get_news()
-    signal = analyze_news(news.lower())
-    await update.message.reply_text(f"🗞️ اخبار منتخب:\n{news}\n\n📌 تحلیل:\n{signal}")
+    elif query.data == "refresh_news":
+        news = get_news()
+        await query.message.reply_text(f"🔄 آخرین اخبار:\n{news}")
 
-# راه‌اندازی ربات
-app = ApplicationBuilder().token("توکن ربات").build()
+    elif query.data == "help_info":
+        await query.message.reply_text("📘 برای تحلیل بازار فقط کافیست دکمه‌ها را فشار دهید.\nهر بار روی 'تحلیل و سیگنال بازار' بزنید تا جدیدترین تحلیل به شما داده شود.")
+
+# اجرای ربات
+app = ApplicationBuilder().token("توکن ربات شما").build()
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("analyze", analyze))
 app.add_handler(CallbackQueryHandler(button_handler))
 app.run_polling()
