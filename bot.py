@@ -12,9 +12,25 @@ def get_news():
 
 # تحلیل ساده اخبار
 def analyze_news(news_text):
-    if "interest rate" in news_text or "inflation" in news_text:
-        return "احتمال افزایش قیمت طلا و دلار وجود دارد. سیگنال خرید."
-    return "فعلاً خبری تاثیرگذار مشاهده نشد. سیگنالی صادر نمی‌شود."
+    keywords_buy = [
+        "inflation", "interest rate", "sanction", "crisis", "conflict",
+        "war", "tension", "oil price rise", "usd rise", "fed hike", "devaluation"
+    ]
+    keywords_sell = [
+        "peace", "agreement", "negotiation", "deal", "interest rate cut",
+        "usd fall", "oil price drop", "recovery", "growth", "stability"
+    ]
+
+    for word in keywords_buy:
+        if word in news_text:
+            return "احتمال افزایش قیمت طلا و دلار وجود دارد. سیگنال خرید."
+
+    for word in keywords_sell:
+        if word in news_text:
+            return "احتمال کاهش قیمت طلا و دلار وجود دارد. سیگنال فروش."
+
+    return "خبر خاصی مشاهده نشد. سیگنالی صادر نمی‌شود."
+
 
 # فرمان /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
