@@ -54,7 +54,7 @@ def fetch_iran_news():
 # ---------------------- EXCHANGE RATES ----------------------
 def fetch_rates():
     try:
-        response = requests.get("https://www.tgju.org/" )
+        response = requests.get("https://www.tgju.org/")
         soup = BeautifulSoup(response.text, "lxml")
 
         dollar = soup.find("td", class_="nf" , text="دلار آزاد").find_next_sibling("td").text.strip()
@@ -98,8 +98,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ---------------------- MAIN ----------------------
 if __name__ == '__main__':
-    app = Application.builder().token("7721073253:AAGq1z2wcdI68SdW06a3xo88dMOGycmcJoY"
-).build()
+    app = Application.builder().token("7721073253:AAGq1z2wcdI68SdW06a3xo88dMOGycmcJoY").build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button))
     app.run_polling()
