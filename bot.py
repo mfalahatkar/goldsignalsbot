@@ -72,7 +72,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⛔ دستور نامعتبر است. لطفاً فقط از دکمه‌ها استفاده کنید.")
 
 # اجرای ربات
-app = ApplicationBuilder().token("توکن_ربات_خود_را_اینجا_قرار_دهید").build()
+app = ApplicationBuilder().token("7721073253:AAGq1z2wcdI68SdW06a3xo88dMOGycmcJoY").build()
 
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CallbackQueryHandler(handle_buttons))  # برای دکمه‌های اینلاین اگر در آینده اضافه شد
