@@ -1,160 +1,102 @@
-import os
+# telegram_news_bot.py
 import requests
 from bs4 import BeautifulSoup
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext, CallbackQueryHandler
 from deep_translator import GoogleTranslator
 
 # توکن ربات تلگرام
-TELEGRAM_BOT_TOKEN = "7721073253:AAGq1z2wcdI68SdW06a3xo88dMOGycmcJoY"
+BOT_TOKEN = "7721073253:AAGq1z2wcdI68SdW06a3xo88dMOGycmcJoY"
 
-# توکن‌های API
-NEWSAPI_TOKEN = "توکن NewsAPI شما"
+# توکن‌های منابع خبری
+NEWSAPI_TOKEN = "27284966a77a4619a5c89846514cb284"
 GNEWS_TOKEN = "cc588426fdda5e76dd8e4f8f7706616e"
 MEDIASTACK_TOKEN = "c50464aae1764f79a272dfaa41cf478f"
 NEWSDATA_TOKEN = "api_live_OQyfGEsKxBWbMbIv2g5VBZXIxlKcQTMiI5Va5tccJ2"
 
-# تابع برای ترجمه متن به فارسی
-def translate_to_farsi(text):
+# تابع دریافت نرخ ارز و طلا از tgju.org
+def get_tgju_rates():
     try:
-        return GoogleTranslator(source='auto', target='fa').translate(text)
+        response = requests.get("https://www.tgju.org")
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        def extract_price(code):
+            el = soup.find("td", {"data-market-row": code})
+            return el.find("span", class_="info-price") if el else None
+
+        rates = {
+            "دلار": extract_price("usd") or "نامشخص",
+            "یورو": extract_price("eur") or "نامشخص",
+            "سکه": extract_price("sekebahar") or "نامشخص",
+            "طلا": extract_price("geram18") or "نامشخص",
+            "بیت کوین": extract_price("btc") or "نامشخص",
+        }
+
+        return {k: v.get_text(strip=True) if v else "نامشخص" for k, v in rates.items()}
     except Exception as e:
-        return f"خطا در ترجمه: {e}"
+        return {"خطا": str(e)}
 
-# تابع برای دریافت نرخ‌های روز از tgju.org
-def get_live_rates():
-    try:
-        url = "https://www.tgju.org/"
-        response = requests.get(url)
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        # استخراج نرخ‌ها
-        rates = {}
-        items = soup.find_all('tr', class_='pointer')
-        for item in items:
-            name = item.find('td', class_='first').get_text(strip=True)
-            price = item.find('td', class_='nf').get_text(strip=True)
-            rates[name] = price
-
-        message = "📊 نرخ‌های روز:\n"
-        for key, value in rates.items():
-            message += f"{key}: {value}\n"
-
-        return message
-    except Exception as e:
-        return f"خطا در دریافت نرخ‌ها: {e}"
-
-# تابع برای دریافت اخبار از NewsAPI
+# تابع دریافت اخبار از NewsAPI
 def get_newsapi_news():
+    url = f"https://newsapi.org/v2/top-headlines?q=gold+OR+dollar+OR+crypto+OR+oil+OR+war&language=en&apiKey={NEWSAPI_TOKEN}"
     try:
-        url = f"https://newsapi.org/v2/top-headlines?language=en&apiKey={NEWSAPI_TOKEN}"
-        response = requests.get(url)
-        data = response.json()
-        articles = data.get('articles', [])[:5]
-
-        message = "📰 اخبار از NewsAPI:\n"
+        r = requests.get(url)
+        data = r.json()
+        articles = data.get("articles", [])[:5]
+        translated_news = []
         for article in articles:
-            title = translate_to_farsi(article.get('title', ''))
-            url = article.get('url', '')
-            message += f"- {title}\n{url}\n"
-
-        return message
+            title = article.get("title", "")
+            desc = article.get("description", "")
+            translated = GoogleTranslator(source='auto', target='fa').translate(f"{title}\n{desc}")
+            translated_news.append(translated)
+        return translated_news
     except Exception as e:
-        return f"خطا در دریافت اخبار: {e}"
+        return [f"خطا در دریافت اخبار: {e}"]
 
-# تابع برای دریافت اخبار از GNews
-def get_gnews_news():
-    try:
-        url = f"https://gnews.io/api/v4/top-headlines?lang=en&token={GNEWS_TOKEN}"
-        response = requests.get(url)
-        data = response.json()
-        articles = data.get('articles', [])[:5]
+# دکمه‌های منو
+keyboard = [
+    [InlineKeyboardButton("📊 نرخ روز", callback_data='rates')],
+    [InlineKeyboardButton("🌍 اخبار جهانی", callback_data='global_news')],
+    [InlineKeyboardButton("🇮🇷 اخبار ایران", callback_data='iran_news')],
+    [InlineKeyboardButton("📡 تحلیل ترکیبی", callback_data='combined_analysis')],
+]
 
-        message = "📰 اخبار از GNews:\n"
-        for article in articles:
-            title = translate_to_farsi(article.get('title', ''))
-            url = article.get('url', '')
-            message += f"- {title}\n{url}\n"
+markup = InlineKeyboardMarkup(keyboard)
 
-        return message
-    except Exception as e:
-        return f"خطا در دریافت اخبار: {e}"
+# دستور start
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("به ربات تحلیل اقتصادی خوش آمدید 👋", reply_markup=markup)
 
-# تابع برای دریافت اخبار از Mediastack
-def get_mediastack_news():
-    try:
-        url = f"http://api.mediastack.com/v1/news?access_key={MEDIASTACK_TOKEN}&languages=en"
-        response = requests.get(url)
-        data = response.json()
-        articles = data.get('data', [])[:5]
-
-        message = "📰 اخبار از Mediastack:\n"
-        for article in articles:
-            title = translate_to_farsi(article.get('title', ''))
-            url = article.get('url', '')
-            message += f"- {title}\n{url}\n"
-
-        return message
-    except Exception as e:
-        return f"خطا در دریافت اخبار: {e}"
-
-# تابع برای دریافت اخبار از NewsData.io
-def get_newsdata_news():
-    try:
-        url = f"https://newsdata.io/api/1/news?apikey={NEWSDATA_TOKEN}&language=en"
-        response = requests.get(url)
-        data = response.json()
-        articles = data.get('results', [])[:5]
-
-        message = "📰 اخبار از NewsData.io:\n"
-        for article in articles:
-            title = translate_to_farsi(article.get('title', ''))
-            url = article.get('link', '')
-            message += f"- {title}\n{url}\n"
-
-        return message
-    except Exception as e:
-        return f"خطا در دریافت اخبار: {e}"
-
-# هندلر برای شروع
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("اخبار ایران", callback_data='iran_news')],
-        [InlineKeyboardButton("اخبار جهان", callback_data='world_news')],
-        [InlineKeyboardButton("تحلیل ترکیبی", callback_data='combined_analysis')],
-        [InlineKeyboardButton("نرخ‌های روز", callback_data='live_rates')],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text('لطفاً یک گزینه را انتخاب کنید:', reply_markup=reply_markup)
-
-# هندلر برای دکمه‌ها
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# مدیریت دکمه‌ها
+def button_handler(update: Update, context: CallbackContext):
     query = update.callback_query
-    await query.answer()
+    query.answer()
 
-    if query.data == 'iran_news':
-        news = get_newsdata_news()
-        await query.edit_message_text(text=news)
-    elif query.data == 'world_news':
+    if query.data == "rates":
+        rates = get_tgju_rates()
+        msg = "\n".join([f"{k}: {v}" for k, v in rates.items()])
+        query.edit_message_text(text=f"نرخ‌های روز:\n{msg}", reply_markup=markup)
+
+    elif query.data == "global_news":
         news = get_newsapi_news()
-        await query.edit_message_text(text=news)
-    elif query.data == 'combined_analysis':
-        news1 = get_newsapi_news()
-        news2 = get_gnews_news()
-        news3 = get_mediastack_news()
-        news4 = get_newsdata_news()
-        combined_news = f"{news1}\n{news2}\n{news3}\n{news4}"
-        await query.edit_message_text(text=combined_news)
-    elif query.data == 'live_rates':
-        rates = get_live_rates()
-        await query.edit_message_text(text=rates)
+        query.edit_message_text(text="\n\n".join(news), reply_markup=markup)
 
-# اجرای ربات
+    elif query.data == "iran_news":
+        query.edit_message_text(text="درحال توسعه اخبار فارسی از منابع داخلی مثل Mehrnews و Farsnews...", reply_markup=markup)
+
+    elif query.data == "combined_analysis":
+        rates = get_tgju_rates()
+        news = get_newsapi_news()
+        msg = "📊 نرخ‌ها:\n" + "\n".join([f"{k}: {v}" for k, v in rates.items()])
+        msg += "\n\n📰 اخبار:\n" + "\n\n".join(news)
+        query.edit_message_text(text=msg, reply_markup=markup)
+
+# راه‌اندازی ربات
 def main():
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(button))
+    app.add_handler(CallbackQueryHandler(button_handler))
     app.run_polling()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
