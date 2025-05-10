@@ -1,119 +1,160 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
-from deep_translator import GoogleTranslator
+import os
 import requests
+from bs4 import BeautifulSoup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+from deep_translator import GoogleTranslator
 
-# === API Keys ===
-NEWSAPI_KEY = "27284966a77a4619a5c89846514cb284"
-GNEWS_KEY = "cc588426fdda5e76dd8e4f8f7706616e"
-MEDIASTACK_KEY = "c50464aae1764f79a272dfaa41cf478f"
-NEWSDATA_KEY = "api_live_OQyfGEsKxBWbMbIv2g5VBZXIxlKcQTMiI5Va5tccJ2"
+# توکن ربات تلگرام
+TELEGRAM_BOT_TOKEN = "7721073253:AAGq1z2wcdI68SdW06a3xo88dMOGycmcJoY"
 
-# === News Fetching Functions ===
-def fetch_news_newsapi():
-    url = f"https://newsapi.org/v2/everything?q=gold+dollar+crypto+iran+oil+sanctions&language=en&sortBy=publishedAt&apiKey={NEWSAPI_KEY}"
-    return requests.get(url).json().get("articles", [])[:5]
+# توکن‌های API
+NEWSAPI_TOKEN = "توکن NewsAPI شما"
+GNEWS_TOKEN = "cc588426fdda5e76dd8e4f8f7706616e"
+MEDIASTACK_TOKEN = "c50464aae1764f79a272dfaa41cf478f"
+NEWSDATA_TOKEN = "api_live_OQyfGEsKxBWbMbIv2g5VBZXIxlKcQTMiI5Va5tccJ2"
 
-def fetch_news_gnews():
-    url = f"https://gnews.io/api/v4/search?q=iran+dollar+gold&lang=en&token={GNEWS_KEY}"
-    return requests.get(url).json().get("articles", [])[:5]
-
-def fetch_news_mediastack():
-    url = f"http://api.mediastack.com/v1/news?access_key={MEDIASTACK_KEY}&keywords=iran+dollar+gold&languages=en"
-    return requests.get(url).json().get("data", [])[:5]
-
-def fetch_news_newsdata():
-    url = f"https://newsdata.io/api/1/news?apikey={NEWSDATA_KEY}&q=iran+dollar+gold&country=ir&language=fa"
-    return requests.get(url).json().get("results", [])[:5]
-
-# === Translation ===
-def translate(text):
+# تابع برای ترجمه متن به فارسی
+def translate_to_farsi(text):
     try:
         return GoogleTranslator(source='auto', target='fa').translate(text)
-    except:
-        return text
+    except Exception as e:
+        return f"خطا در ترجمه: {e}"
 
-# === Simple News Analyzer ===
-def analyze_news(text):
-    buy_signals = ["تحریم", "افزایش نرخ بهره", "تنش", "درگیری", "جنگ", "نرخ نفت", "کاهش ارزش ریال"]
-    sell_signals = ["توافق", "مذاکره", "کاهش نرخ بهره", "ثبات"]
-
-    score = 0
-    for word in buy_signals:
-        if word in text:
-            score += 1
-    for word in sell_signals:
-        if word in text:
-            score -= 1
-
-    if score > 0:
-        return "📈 سیگنال خرید: احتمال افزایش قیمت طلا و دلار وجود دارد."
-    elif score < 0:
-        return "📉 سیگنال فروش: احتمال کاهش قیمت طلا و دلار وجود دارد."
-    else:
-        return "ℹ️ سیگنال خاصی در اخبار مشاهده نشد."
-
-# === Daily Prices ===
-def fetch_daily_rates():
+# تابع برای دریافت نرخ‌های روز از tgju.org
+def get_live_rates():
     try:
-        response = requests.get("https://api.navasan.tech/latest/?api_key=free")  # Replace if using paid API
+        url = "https://www.tgju.org/"
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # استخراج نرخ‌ها
+        rates = {}
+        items = soup.find_all('tr', class_='pointer')
+        for item in items:
+            name = item.find('td', class_='first').get_text(strip=True)
+            price = item.find('td', class_='nf').get_text(strip=True)
+            rates[name] = price
+
+        message = "📊 نرخ‌های روز:\n"
+        for key, value in rates.items():
+            message += f"{key}: {value}\n"
+
+        return message
+    except Exception as e:
+        return f"خطا در دریافت نرخ‌ها: {e}"
+
+# تابع برای دریافت اخبار از NewsAPI
+def get_newsapi_news():
+    try:
+        url = f"https://newsapi.org/v2/top-headlines?language=en&apiKey={NEWSAPI_TOKEN}"
+        response = requests.get(url)
         data = response.json()
-        gold = data.get("geram18", {}).get("value", "نامشخص")
-        dollar = data.get("usd", {}).get("value", "نامشخص")
-        btc = data.get("btc", {}).get("value", "نامشخص")
-        return f"\n💰 قیمت روز:\nدلار: {dollar}\nطلای ۱۸ عیار: {gold}\nبیت‌کوین: {btc} تومان"
-    except:
-        return "❗ دریافت نرخ روز ممکن نشد."
+        articles = data.get('articles', [])[:5]
 
-# === Main Menu ===
-def main_menu():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📡 تحلیل اخبار جهانی", callback_data="global_news")],
-        [InlineKeyboardButton("🗞 تحلیل اخبار ایران", callback_data="iran_news")],
-        [InlineKeyboardButton("🌐 تحلیل ترکیبی (جهانی + ایران)", callback_data="mixed_news")],
-        [InlineKeyboardButton("💰 نرخ روز طلا، دلار و رمزارز", callback_data="daily_rate")],
-        [InlineKeyboardButton("ℹ️ راهنما", callback_data="help")]
-    ])
+        message = "📰 اخبار از NewsAPI:\n"
+        for article in articles:
+            title = translate_to_farsi(article.get('title', ''))
+            url = article.get('url', '')
+            message += f"- {title}\n{url}\n"
 
-# === Command /start ===
+        return message
+    except Exception as e:
+        return f"خطا در دریافت اخبار: {e}"
+
+# تابع برای دریافت اخبار از GNews
+def get_gnews_news():
+    try:
+        url = f"https://gnews.io/api/v4/top-headlines?lang=en&token={GNEWS_TOKEN}"
+        response = requests.get(url)
+        data = response.json()
+        articles = data.get('articles', [])[:5]
+
+        message = "📰 اخبار از GNews:\n"
+        for article in articles:
+            title = translate_to_farsi(article.get('title', ''))
+            url = article.get('url', '')
+            message += f"- {title}\n{url}\n"
+
+        return message
+    except Exception as e:
+        return f"خطا در دریافت اخبار: {e}"
+
+# تابع برای دریافت اخبار از Mediastack
+def get_mediastack_news():
+    try:
+        url = f"http://api.mediastack.com/v1/news?access_key={MEDIASTACK_TOKEN}&languages=en"
+        response = requests.get(url)
+        data = response.json()
+        articles = data.get('data', [])[:5]
+
+        message = "📰 اخبار از Mediastack:\n"
+        for article in articles:
+            title = translate_to_farsi(article.get('title', ''))
+            url = article.get('url', '')
+            message += f"- {title}\n{url}\n"
+
+        return message
+    except Exception as e:
+        return f"خطا در دریافت اخبار: {e}"
+
+# تابع برای دریافت اخبار از NewsData.io
+def get_newsdata_news():
+    try:
+        url = f"https://newsdata.io/api/1/news?apikey={NEWSDATA_TOKEN}&language=en"
+        response = requests.get(url)
+        data = response.json()
+        articles = data.get('results', [])[:5]
+
+        message = "📰 اخبار از NewsData.io:\n"
+        for article in articles:
+            title = translate_to_farsi(article.get('title', ''))
+            url = article.get('link', '')
+            message += f"- {title}\n{url}\n"
+
+        return message
+    except Exception as e:
+        return f"خطا در دریافت اخبار: {e}"
+
+# هندلر برای شروع
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "سلام! به ربات تحلیل‌گر بازار خوش آمدید. یکی از گزینه‌های زیر را انتخاب کنید:",
-        reply_markup=main_menu()
-    )
+    keyboard = [
+        [InlineKeyboardButton("اخبار ایران", callback_data='iran_news')],
+        [InlineKeyboardButton("اخبار جهان", callback_data='world_news')],
+        [InlineKeyboardButton("تحلیل ترکیبی", callback_data='combined_analysis')],
+        [InlineKeyboardButton("نرخ‌های روز", callback_data='live_rates')],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text('لطفاً یک گزینه را انتخاب کنید:', reply_markup=reply_markup)
 
-# === Handle Callback Queries ===
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# هندلر برای دکمه‌ها
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    if query.data == "global_news":
-        articles = fetch_news_newsapi() + fetch_news_gnews() + fetch_news_mediastack()
-        full_text = "\n".join([translate(a.get("title", "")) for a in articles])
-        signal = analyze_news(full_text)
-        await query.message.reply_text(f"🌐 تحلیل اخبار جهانی:\n{full_text}\n\n📊 نتیجه: {signal}")
+    if query.data == 'iran_news':
+        news = get_newsdata_news()
+        await query.edit_message_text(text=news)
+    elif query.data == 'world_news':
+        news = get_newsapi_news()
+        await query.edit_message_text(text=news)
+    elif query.data == 'combined_analysis':
+        news1 = get_newsapi_news()
+        news2 = get_gnews_news()
+        news3 = get_mediastack_news()
+        news4 = get_newsdata_news()
+        combined_news = f"{news1}\n{news2}\n{news3}\n{news4}"
+        await query.edit_message_text(text=combined_news)
+    elif query.data == 'live_rates':
+        rates = get_live_rates()
+        await query.edit_message_text(text=rates)
 
-    elif query.data == "iran_news":
-        articles = fetch_news_newsdata()
-        full_text = "\n".join([a.get("title", "") for a in articles])
-        signal = analyze_news(full_text)
-        await query.message.reply_text(f"🇮🇷 تحلیل اخبار داخلی:\n{full_text}\n\n📊 نتیجه: {signal}")
+# اجرای ربات
+def main():
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(button))
+    app.run_polling()
 
-    elif query.data == "mixed_news":
-        articles = fetch_news_newsapi() + fetch_news_newsdata()
-        full_text = "\n".join([translate(a.get("title", "")) for a in articles])
-        signal = analyze_news(full_text)
-        await query.message.reply_text(f"📊 تحلیل ترکیبی:\n{full_text}\n\n📈 نتیجه: {signal}")
-
-    elif query.data == "daily_rate":
-        rates = fetch_daily_rates()
-        await query.message.reply_text(rates)
-
-    elif query.data == "help":
-        await query.message.reply_text("برای دریافت تحلیل و نرخ‌ها، فقط دکمه‌های منو را فشار دهید. هر بار تحلیل جدیدی برایتان ارسال می‌شود.")
-
-# === Bot Initialization ===
-app = ApplicationBuilder().token("توکن ربات شما را اینجا بگذارید").build()
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CallbackQueryHandler(button_handler))
-app.run_polling()
+if __name__ == '__main__':
+    main()
