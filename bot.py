@@ -1,7 +1,6 @@
-from telegram import ReplyKeyboardMarkup, KeyboardButton
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
-from telegram.ext import MessageHandler, filters
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 import requests
 
 # دریافت اخبار اقتصادی
@@ -34,21 +33,13 @@ def analyze_news(news_text):
     return "ℹ️ خبر خاصی مشاهده نشد. سیگنالی صادر نمی‌شود."
 
 
-# منوی اصلی با دکمه‌ها
-def main_menu():
-    keyboard = [
-        [InlineKeyboardButton("📡 تحلیل و سیگنال بازار", callback_data="analyze_signal")],
-        [InlineKeyboardButton("🔄 به‌روزرسانی اخبار", callback_data="refresh_news")],
-        [InlineKeyboardButton("ℹ️ راهنما", callback_data="help_info")]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-# فرمان /start با دکمه‌ها
+# فرمان /start با کیبورد دکمه‌ای
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [KeyboardButton("📊 آنالیز اخبار")],
         [KeyboardButton("💹 دریافت سیگنال")],
-        [KeyboardButton("🔄 به‌روزرسانی اخبار")]
+        [KeyboardButton("🔄 به‌روزرسانی اخبار")],
+        [KeyboardButton("ℹ️ راهنما")]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text(
@@ -56,24 +47,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-
-# رسیدگی به دکمه‌ها
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    if query.data == "analyze_signal":
-        news = get_news()
-        signal = analyze_news(news.lower())
-        await query.message.reply_text(f"🗞️ اخبار منتخب:\n{news}\n\n📊 تحلیل:\n{signal}")
-
-    elif query.data == "refresh_news":
-        news = get_news()
-        await query.message.reply_text(f"🔄 آخرین اخبار:\n{news}")
-
-    elif query.data == "help_info":
-        await query.message.reply_text("📘 برای تحلیل بازار فقط کافیست دکمه‌ها را فشار دهید.\nهر بار روی 'تحلیل و سیگنال بازار' بزنید تا جدیدترین تحلیل به شما داده شود.")
-# واکنش به کلیک روی دکمه‌ها
+# واکنش به دکمه‌های کیبورد
 async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
@@ -91,11 +65,17 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         news = get_news()
         await update.message.reply_text(f"📥 جدیدترین اخبار:\n{news}")
     
+    elif text == "ℹ️ راهنما":
+        await update.message.reply_text("📘 برای تحلیل بازار فقط کافیست یکی از دکمه‌های پایین را فشار دهید.\nهر بار روی 'آنالیز اخبار' یا 'دریافت سیگنال' بزنید تا جدیدترین تحلیل به شما داده شود.")
+    
     else:
-        await update.message.reply_text("دستور نامعتبر است. لطفاً از دکمه‌ها استفاده کنید.")
+        await update.message.reply_text("⛔ دستور نامعتبر است. لطفاً فقط از دکمه‌ها استفاده کنید.")
 
 # اجرای ربات
-app = ApplicationBuilder().token("توکن ربات شما").build()
+app = ApplicationBuilder().token("توکن_ربات_خود_را_اینجا_قرار_دهید").build()
+
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CallbackQueryHandler(button_handler))
+app.add_handler(CallbackQueryHandler(handle_buttons))  # برای دکمه‌های اینلاین اگر در آینده اضافه شد
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_buttons))
+
 app.run_polling()
