@@ -1,118 +1,119 @@
-from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 from deep_translator import GoogleTranslator
 import requests
 
-# 📰 دریافت اخبار جهانی
-def get_global_news():
-    news_list = []
+# === API Keys ===
+NEWSAPI_KEY = "27284966a77a4619a5c89846514cb284"
+GNEWS_KEY = "cc588426fdda5e76dd8e4f8f7706616e"
+MEDIASTACK_KEY = "c50464aae1764f79a272dfaa41cf478f"
+NEWSDATA_KEY = "api_live_OQyfGEsKxBWbMbIv2g5VBZXIxlKcQTMiI5Va5tccJ2"
 
-    # NewsAPI
+# === News Fetching Functions ===
+def fetch_news_newsapi():
+    url = f"https://newsapi.org/v2/everything?q=gold+dollar+crypto+iran+oil+sanctions&language=en&sortBy=publishedAt&apiKey={NEWSAPI_KEY}"
+    return requests.get(url).json().get("articles", [])[:5]
+
+def fetch_news_gnews():
+    url = f"https://gnews.io/api/v4/search?q=iran+dollar+gold&lang=en&token={GNEWS_KEY}"
+    return requests.get(url).json().get("articles", [])[:5]
+
+def fetch_news_mediastack():
+    url = f"http://api.mediastack.com/v1/news?access_key={MEDIASTACK_KEY}&keywords=iran+dollar+gold&languages=en"
+    return requests.get(url).json().get("data", [])[:5]
+
+def fetch_news_newsdata():
+    url = f"https://newsdata.io/api/1/news?apikey={NEWSDATA_KEY}&q=iran+dollar+gold&country=ir&language=fa"
+    return requests.get(url).json().get("results", [])[:5]
+
+# === Translation ===
+def translate(text):
     try:
-        url = "https://newsapi.org/v2/everything?q=gold+dollar+oil+crypto+war&language=en&sortBy=publishedAt&apiKey=27284966a77a4619a5c89846514cb284"
-        articles = requests.get(url).json().get("articles", [])[:3]
-        for a in articles:
-            news_list.append(a["title"])
+        return GoogleTranslator(source='auto', target='fa').translate(text)
     except:
-        pass
+        return text
 
-    # GNews
-    try:
-        url = "https://gnews.io/api/v4/search?q=gold+dollar+crypto+war+oil&lang=en&token=cc588426fdda5e76dd8e4f8f7706616e"
-        articles = requests.get(url).json().get("articles", [])[:3]
-        for a in articles:
-            news_list.append(a["title"])
-    except:
-        pass
+# === Simple News Analyzer ===
+def analyze_news(text):
+    buy_signals = ["تحریم", "افزایش نرخ بهره", "تنش", "درگیری", "جنگ", "نرخ نفت", "کاهش ارزش ریال"]
+    sell_signals = ["توافق", "مذاکره", "کاهش نرخ بهره", "ثبات"]
 
-    # Mediastack
-    try:
-        url = "http://api.mediastack.com/v1/news?access_key=c50464aae1764f79a272dfaa41cf478f&keywords=dollar,gold,crypto,war&languages=en"
-        articles = requests.get(url).json().get("data", [])[:3]
-        for a in articles:
-            news_list.append(a["title"])
-    except:
-        pass
+    score = 0
+    for word in buy_signals:
+        if word in text:
+            score += 1
+    for word in sell_signals:
+        if word in text:
+            score -= 1
 
-    return news_list
-
-# 📰 دریافت اخبار ایران
-def get_iran_news():
-    news_list = []
-    try:
-        url = "https://newsdata.io/api/1/news?apikey=api_live_OQyfGEsKxBWbMbIv2g5VBZXIxlKcQTMiI5Va5tccJ2&country=ir&language=fa&category=business,politics"
-        articles = requests.get(url).json().get("results", [])[:5]
-        for a in articles:
-            news_list.append(a["title"])
-    except:
-        pass
-    return news_list
-
-# 🔄 ترجمه اخبار
-def translate_news(news_list):
-    translated = []
-    for item in news_list:
-        try:
-            translated.append(GoogleTranslator(source='auto', target='fa').translate(item))
-        except:
-            translated.append(item)
-    return translated
-
-# 📈 تحلیل اخبار و تولید سیگنال
-def analyze_news(news_texts):
-    buy_keywords = ["تحریم", "افزایش نرخ بهره", "بحران", "جنگ", "تورم", "تنش", "افزایش قیمت نفت", "کاهش ارزش پول"]
-    sell_keywords = ["توافق", "صلح", "کاهش نرخ بهره", "ثبات", "رشد اقتصادی"]
-
-    for news in news_texts:
-        for word in buy_keywords:
-            if word in news:
-                return "📈 سیگنال خرید: احتمال افزایش قیمت طلا، دلار یا رمزارزها وجود دارد."
-        for word in sell_keywords:
-            if word in news:
-                return "📉 سیگنال فروش: احتمال کاهش قیمت طلا، دلار یا رمزارزها وجود دارد."
-    return "ℹ️ سیگنالی یافت نشد."
-
-# 🎛 منوی دکمه‌ها
-def main_menu():
-    keyboard = [
-        [KeyboardButton("🌍 تحلیل اخبار جهانی")],
-        [KeyboardButton("🇮🇷 تحلیل اخبار ایران")],
-        [KeyboardButton("🌐 تحلیل ترکیبی")],
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
-# /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("سلام! به ربات تحلیل بازار طلا، دلار و رمزارز خوش آمدید.", reply_markup=main_menu())
-
-# 🎯 واکنش به دکمه‌ها
-async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message.text
-
-    if msg == "🌍 تحلیل اخبار جهانی":
-        news = get_global_news()
-        translated = translate_news(news)
-        signal = analyze_news(translated)
-        await update.message.reply_text("📰 اخبار جهانی:\n" + "\n".join(translated) + "\n\n🔍 " + signal)
-
-    elif msg == "🇮🇷 تحلیل اخبار ایران":
-        news = get_iran_news()
-        signal = analyze_news(news)
-        await update.message.reply_text("🗞️ اخبار ایران:\n" + "\n".join(news) + "\n\n🔍 " + signal)
-
-    elif msg == "🌐 تحلیل ترکیبی":
-        news_global = get_global_news()
-        news_iran = get_iran_news()
-        translated = translate_news(news_global)
-        combined = news_iran + translated
-        signal = analyze_news(combined)
-        await update.message.reply_text("📡 تحلیل ترکیبی:\n" + "\n".join(combined) + "\n\n🔍 " + signal)
-
+    if score > 0:
+        return "📈 سیگنال خرید: احتمال افزایش قیمت طلا و دلار وجود دارد."
+    elif score < 0:
+        return "📉 سیگنال فروش: احتمال کاهش قیمت طلا و دلار وجود دارد."
     else:
-        await update.message.reply_text("دستور نامعتبر است. لطفاً از منوی دکمه‌ها استفاده کنید.")
+        return "ℹ️ سیگنال خاصی در اخبار مشاهده نشد."
 
-# اجرای ربات
-app = ApplicationBuilder().token("7721073253:AAGq1z2wcdI68SdW06a3xo88dMOGycmcJoY").build()
+# === Daily Prices ===
+def fetch_daily_rates():
+    try:
+        response = requests.get("https://api.navasan.tech/latest/?api_key=free")  # Replace if using paid API
+        data = response.json()
+        gold = data.get("geram18", {}).get("value", "نامشخص")
+        dollar = data.get("usd", {}).get("value", "نامشخص")
+        btc = data.get("btc", {}).get("value", "نامشخص")
+        return f"\n💰 قیمت روز:\nدلار: {dollar}\nطلای ۱۸ عیار: {gold}\nبیت‌کوین: {btc} تومان"
+    except:
+        return "❗ دریافت نرخ روز ممکن نشد."
+
+# === Main Menu ===
+def main_menu():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📡 تحلیل اخبار جهانی", callback_data="global_news")],
+        [InlineKeyboardButton("🗞 تحلیل اخبار ایران", callback_data="iran_news")],
+        [InlineKeyboardButton("🌐 تحلیل ترکیبی (جهانی + ایران)", callback_data="mixed_news")],
+        [InlineKeyboardButton("💰 نرخ روز طلا، دلار و رمزارز", callback_data="daily_rate")],
+        [InlineKeyboardButton("ℹ️ راهنما", callback_data="help")]
+    ])
+
+# === Command /start ===
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "سلام! به ربات تحلیل‌گر بازار خوش آمدید. یکی از گزینه‌های زیر را انتخاب کنید:",
+        reply_markup=main_menu()
+    )
+
+# === Handle Callback Queries ===
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "global_news":
+        articles = fetch_news_newsapi() + fetch_news_gnews() + fetch_news_mediastack()
+        full_text = "\n".join([translate(a.get("title", "")) for a in articles])
+        signal = analyze_news(full_text)
+        await query.message.reply_text(f"🌐 تحلیل اخبار جهانی:\n{full_text}\n\n📊 نتیجه: {signal}")
+
+    elif query.data == "iran_news":
+        articles = fetch_news_newsdata()
+        full_text = "\n".join([a.get("title", "") for a in articles])
+        signal = analyze_news(full_text)
+        await query.message.reply_text(f"🇮🇷 تحلیل اخبار داخلی:\n{full_text}\n\n📊 نتیجه: {signal}")
+
+    elif query.data == "mixed_news":
+        articles = fetch_news_newsapi() + fetch_news_newsdata()
+        full_text = "\n".join([translate(a.get("title", "")) for a in articles])
+        signal = analyze_news(full_text)
+        await query.message.reply_text(f"📊 تحلیل ترکیبی:\n{full_text}\n\n📈 نتیجه: {signal}")
+
+    elif query.data == "daily_rate":
+        rates = fetch_daily_rates()
+        await query.message.reply_text(rates)
+
+    elif query.data == "help":
+        await query.message.reply_text("برای دریافت تحلیل و نرخ‌ها، فقط دکمه‌های منو را فشار دهید. هر بار تحلیل جدیدی برایتان ارسال می‌شود.")
+
+# === Bot Initialization ===
+app = ApplicationBuilder().token("توکن ربات شما را اینجا بگذارید").build()
 app.add_handler(CommandHandler("start", start))
-app.add_handler(MessageHandler(filters.TEXT, handle_buttons))
+app.add_handler(CallbackQueryHandler(button_handler))
 app.run_polling()
