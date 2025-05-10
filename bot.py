@@ -1,6 +1,7 @@
 from telegram import ReplyKeyboardMarkup, KeyboardButton
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import MessageHandler, filters
 import requests
 
 # دریافت اخبار اقتصادی
@@ -72,6 +73,26 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "help_info":
         await query.message.reply_text("📘 برای تحلیل بازار فقط کافیست دکمه‌ها را فشار دهید.\nهر بار روی 'تحلیل و سیگنال بازار' بزنید تا جدیدترین تحلیل به شما داده شود.")
+# واکنش به کلیک روی دکمه‌ها
+async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+
+    if text == "📊 آنالیز اخبار":
+        news = get_news()
+        signal = analyze_news(news.lower())
+        await update.message.reply_text(f"📰 اخبار منتخب:\n{news}\n\n🔍 تحلیل:\n{signal}")
+    
+    elif text == "💹 دریافت سیگنال":
+        news = get_news()
+        signal = analyze_news(news.lower())
+        await update.message.reply_text(f"📈 سیگنال نهایی:\n{signal}")
+    
+    elif text == "🔄 به‌روزرسانی اخبار":
+        news = get_news()
+        await update.message.reply_text(f"📥 جدیدترین اخبار:\n{news}")
+    
+    else:
+        await update.message.reply_text("دستور نامعتبر است. لطفاً از دکمه‌ها استفاده کنید.")
 
 # اجرای ربات
 app = ApplicationBuilder().token("توکن ربات شما").build()
