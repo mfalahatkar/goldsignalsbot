@@ -98,7 +98,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ---------------------- MAIN ----------------------
 if __name__ == '__main__':
-    app = Application.builder().token(7721073253:AAGq1z2wcdI68SdW06a3xo88dMOGycmcJoY
+    app = Application.builder().token("7721073253:AAGq1z2wcdI68SdW06a3xo88dMOGycmcJoY"
 ).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button))
