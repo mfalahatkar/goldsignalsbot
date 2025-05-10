@@ -1,25 +1,33 @@
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 import requests
+from googletrans import Translator
 
-# دریافت اخبار اقتصادی
+# تابع دریافت اخبار و ترجمه به فارسی
 def get_news():
     url = "https://newsapi.org/v2/everything?q=gold+dollar+economy+iran&language=en&sortBy=publishedAt&apiKey=27284966a77a4619a5c89846514cb284"
     response = requests.get(url)
     articles = response.json().get("articles", [])[:5]
-    news_list = [f"{a['title']} - {a['source']['name']}" for a in articles]
+    
+    translator = Translator()
+    news_list = []
+
+    for a in articles:
+        english_text = f"{a['title']} - {a['source']['name']}"
+        translated = translator.translate(english_text, src='en', dest='fa')
+        news_list.append(translated.text)
+
     return "\n".join(news_list)
 
-# تحلیل ساده اخبار
+# تابع تحلیل اخبار ترجمه‌شده
 def analyze_news(news_text):
     keywords_buy = [
-        "inflation", "interest rate", "sanction", "crisis", "conflict",
-        "war", "tension", "oil price rise", "usd rise", "fed hike", "devaluation"
+        "تورم", "افزایش نرخ بهره", "تحریم", "بحران", "درگیری",
+        "جنگ", "تنش", "افزایش قیمت نفت", "افزایش ارزش دلار", "افزایش نرخ فدرال", "کاهش ارزش پول ملی"
     ]
     keywords_sell = [
-        "peace", "agreement", "negotiation", "deal", "interest rate cut",
-        "usd fall", "oil price drop", "recovery", "growth", "stability"
+        "صلح", "توافق", "مذاکره", "قرارداد", "کاهش نرخ بهره",
+        "کاهش ارزش دلار", "کاهش قیمت نفت", "رشد اقتصادی", "ثبات"
     ]
 
     for word in keywords_buy:
@@ -33,7 +41,7 @@ def analyze_news(news_text):
     return "ℹ️ خبر خاصی مشاهده نشد. سیگنالی صادر نمی‌شود."
 
 
-# فرمان /start با کیبورد دکمه‌ای
+# /start: نمایش منوی کلیددار
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [KeyboardButton("📊 آنالیز اخبار")],
@@ -43,39 +51,40 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text(
-        "سلام! من ربات تحلیلگر بازار طلا و دلار هستم.\nلطفاً یکی از گزینه‌های زیر را انتخاب کنید:",
+        "سلام! من ربات تحلیل‌گر بازار طلا و دلار هستم.\nلطفاً یکی از گزینه‌های زیر را انتخاب کنید:",
         reply_markup=reply_markup
     )
 
-# واکنش به دکمه‌های کیبورد
+# کنترل عملکرد کلیدها
 async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
     if text == "📊 آنالیز اخبار":
         news = get_news()
-        signal = analyze_news(news.lower())
-        await update.message.reply_text(f"📰 اخبار منتخب:\n{news}\n\n🔍 تحلیل:\n{signal}")
+        signal = analyze_news(news)
+        await update.message.reply_text(f"📰 اخبار منتخب (ترجمه‌شده):\n{news}\n\n🔍 تحلیل:\n{signal}")
     
     elif text == "💹 دریافت سیگنال":
         news = get_news()
-        signal = analyze_news(news.lower())
+        signal = analyze_news(news)
         await update.message.reply_text(f"📈 سیگنال نهایی:\n{signal}")
     
     elif text == "🔄 به‌روزرسانی اخبار":
         news = get_news()
-        await update.message.reply_text(f"📥 جدیدترین اخبار:\n{news}")
+        await update.message.reply_text(f"📥 جدیدترین اخبار (ترجمه‌شده):\n{news}")
     
     elif text == "ℹ️ راهنما":
-        await update.message.reply_text("📘 برای تحلیل بازار فقط کافیست یکی از دکمه‌های پایین را فشار دهید.\nهر بار روی 'آنالیز اخبار' یا 'دریافت سیگنال' بزنید تا جدیدترین تحلیل به شما داده شود.")
-    
+        await update.message.reply_text("📘 راهنمای استفاده:\n\n"
+            "- برای تحلیل بازار روی '📊 آنالیز اخبار' بزن.\n"
+            "- برای دریافت فقط سیگنال سریع، روی '💹 دریافت سیگنال' بزن.\n"
+            "- برای مشاهده فقط اخبار ترجمه‌شده، روی '🔄 به‌روزرسانی اخبار' بزن.\n"
+            "- اگر سوالی داشتی، دوباره /start رو بزن تا منو نمایش داده بشه.")
+
     else:
-        await update.message.reply_text("⛔ دستور نامعتبر است. لطفاً فقط از دکمه‌ها استفاده کنید.")
+        await update.message.reply_text("⛔ دستور نامعتبر است. لطفاً فقط از دکمه‌ها استفاده کن.")
 
 # اجرای ربات
 app = ApplicationBuilder().token("7721073253:AAGq1z2wcdI68SdW06a3xo88dMOGycmcJoY").build()
-
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CallbackQueryHandler(handle_buttons))  # برای دکمه‌های اینلاین اگر در آینده اضافه شد
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_buttons))
-
 app.run_polling()
