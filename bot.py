@@ -27,7 +27,7 @@ async def analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"اخبار منتخب:\n{news}\n\nتحلیل:\n{signal}")
 
 # راه‌اندازی ربات
-app = app = ApplicationBuilder().token("7721073253:AAGq1z2wcdI68SdW06a3xo88dMOGycmcJoY").build()
+app = ApplicationBuilder().token("7721073253:AAGq1z2wcdI68SdW06a3xo88dMOGycmcJoY").build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("analyze", analyze))
 app.run_polling()
