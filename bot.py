@@ -4,7 +4,7 @@ import requests
 
 # دریافت اخبار اقتصادی
 def get_news():
-    url = "https://newsapi.org/v2/everything?q=gold+dollar+economy+iran&language=en&sortBy=publishedAt&apiKey=YOUR_NEWS_API_KEY"
+    url = "https://newsapi.org/v2/everything?q=gold+dollar+economy+iran&language=en&sortBy=publishedAt&apiKey=27284966a77a4619a5c89846514cb284"
     response = requests.get(url)
     articles = response.json().get("articles", [])[:5]
     news_list = [f"{a['title']} - {a['source']['name']}" for a in articles]
