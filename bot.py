@@ -44,10 +44,17 @@ def main_menu():
 
 # فرمان /start با دکمه‌ها
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [KeyboardButton("📊 آنالیز اخبار")],
+        [KeyboardButton("💹 دریافت سیگنال")],
+        [KeyboardButton("🔄 به‌روزرسانی اخبار")]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text(
-        "سلام! به ربات تحلیلگر طلا و دلار خوش آمدید 👋\nاز دکمه‌های زیر استفاده کنید:",
-        reply_markup=main_menu()
+        "سلام! من ربات تحلیلگر بازار طلا و دلار هستم.\nلطفاً یکی از گزینه‌های زیر را انتخاب کنید:",
+        reply_markup=reply_markup
     )
+
 
 # رسیدگی به دکمه‌ها
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
